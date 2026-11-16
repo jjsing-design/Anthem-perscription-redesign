@@ -27,3 +27,12 @@ Sign in with any username and password. The sample member is Jordan Ellis.
 | [Iteration](docs/iteration.md) | What changed after the first pass |
 | [Validation plan](docs/validation-plan.md) | How to test the refill flow |
 | [Case study](docs/case-study.md) | The story in one place |
+
+## Product thinking
+The problem framing, workflow maps, and decisions behind this redesign are in [`docs/product-thinking`](docs/product-thinking):
+- [Problem statement](docs/product-thinking/01-problem-statement.md)
+- [Observed vs. assumed](docs/product-thinking/02-observed-vs-assumed.md)
+- [Workflow: success path](docs/product-thinking/03-workflow-success-path.md)
+- [Workflow: exception paths](docs/product-thinking/04-workflow-exceptions.md)
+- [Decision log](docs/product-thinking/05-decision-log.md)
+Work in progress: remaining exception paths, a consolidated data model, and acceptance criteria.
