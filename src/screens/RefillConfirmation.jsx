@@ -1,22 +1,27 @@
 import { useState } from 'react';
 import {
+  HOME_DELIVERY_FEE,
   costBreakdown,
   expectedDate,
   formatDate,
   money,
   pharmacies,
 } from '../data/mockData';
-import { cardStyle, fixedBarStyle, primaryButton, secondaryButton, theme } from '../theme';
+import { cardStyle, fieldStyle, fixedBarStyle, primaryButton, secondaryButton, theme } from '../theme';
 
 const DELIVERY = [
-  { id: 'home', label: 'Home delivery', detail: 'Ships to the address on file in about 5 days' },
-  { id: 'pickup', label: 'Pharmacy pickup', detail: 'Usually ready tomorrow' },
+  {
+    id: 'home',
+    label: 'Home delivery',
+    detail: `Ships to the address on file in about 5 days · ${money(HOME_DELIVERY_FEE)} delivery fee`,
+  },
+  { id: 'pickup', label: 'Pharmacy pickup', detail: 'Usually ready tomorrow · no delivery fee' },
 ];
 
 export default function RefillConfirmation({ prescription, onCancel, onConfirm }) {
   const [pharmacyId, setPharmacyId] = useState(pharmacies[0].id);
   const [delivery, setDelivery] = useState('pickup');
-  const costs = costBreakdown(prescription);
+  const costs = costBreakdown(prescription, delivery);
   const pharmacy = pharmacies.find((item) => item.id === pharmacyId);
 
   function selectPharmacy(id) {
@@ -28,11 +33,30 @@ export default function RefillConfirmation({ prescription, onCancel, onConfirm }
   }
 
   return (
-    <div style={{ padding: 'calc(12px + env(safe-area-inset-top)) 20px calc(118px + env(safe-area-inset-bottom))' }}>
-      <h1 style={{ margin: '8px 0 16px', fontSize: 30, lineHeight: 1.15 }}>Confirm refill</h1>
+    <div style={{ padding: 'calc(16px + env(safe-area-inset-top)) 20px calc(124px + env(safe-area-inset-bottom))' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '44px 1fr 44px', alignItems: 'center', marginBottom: 16 }}>
+        <button
+          type="button"
+          onClick={onCancel}
+          aria-label="Back"
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 999,
+            background: theme.white,
+            color: theme.text,
+            boxShadow: theme.shadow,
+            fontSize: 22,
+            lineHeight: 1,
+          }}
+        >
+          ‹
+        </button>
+        <h1 style={{ margin: 0, textAlign: 'center', fontSize: 18, letterSpacing: '-0.03em' }}>Confirm refill</h1>
+      </div>
 
       <section aria-label="Medication" style={{ ...cardStyle, display: 'grid', gap: 6 }}>
-        <h2 style={{ margin: 0, fontSize: 20 }}>{prescription.name}</h2>
+        <h2 style={{ margin: 0, fontSize: 22, letterSpacing: '-0.03em' }}>{prescription.name}</h2>
         <p style={{ margin: 0, color: theme.muted, fontSize: 15 }}>
           {prescription.dosage} · {prescription.quantity} {prescription.form.toLowerCase()}s · {prescription.daysSupply}-day supply
         </p>
@@ -48,15 +72,7 @@ export default function RefillConfirmation({ prescription, onCancel, onConfirm }
           id="pharmacy"
           value={pharmacyId}
           onChange={(event) => selectPharmacy(event.target.value)}
-          style={{
-            width: '100%',
-            border: `1.5px solid ${theme.line}`,
-            borderRadius: 12,
-            padding: '12px 14px',
-            fontSize: 16,
-            background: theme.white,
-            color: theme.text,
-          }}
+          style={fieldStyle}
         >
           {pharmacies.map((item) => (
             <option key={item.id} value={item.id}>
@@ -78,6 +94,7 @@ export default function RefillConfirmation({ prescription, onCancel, onConfirm }
                 display: 'flex',
                 gap: 12,
                 alignItems: 'flex-start',
+                background: selected ? theme.blueSoft : theme.white,
                 boxShadow: selected ? `inset 0 0 0 2px ${theme.blue}` : theme.shadow,
                 cursor: 'pointer',
               }}
@@ -88,7 +105,7 @@ export default function RefillConfirmation({ prescription, onCancel, onConfirm }
                 value={option.id}
                 checked={selected}
                 onChange={() => setDelivery(option.id)}
-                style={{ marginTop: 3 }}
+                style={{ marginTop: 3, accentColor: theme.blue }}
               />
               <span>
                 <span style={{ display: 'block', fontWeight: 700 }}>{option.label}</span>
@@ -119,8 +136,8 @@ export default function RefillConfirmation({ prescription, onCancel, onConfirm }
           gridTemplateColumns: '1fr 1.4fr',
           gap: 10,
           padding: '12px 20px calc(12px + env(safe-area-inset-bottom))',
-          background: 'rgba(243, 245, 248, 0.96)',
-          borderTop: `1px solid ${theme.line}`,
+          background: 'rgba(244, 247, 251, 0.96)',
+          boxShadow: '0 -12px 32px rgba(59, 120, 240, 0.08)',
         }}
       >
         <button type="button" onClick={onCancel} style={secondaryButton(false)}>

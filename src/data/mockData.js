@@ -108,12 +108,15 @@ export function canRefill(rx, today = new Date()) {
   return getRxStatus(rx, today) === 'refill_available';
 }
 
-export function costBreakdown(rx) {
-  const youPay = Math.round((rx.medicationCost - rx.planPays) * 100) / 100;
+export const HOME_DELIVERY_FEE = 4.99;
+
+export function costBreakdown(rx, delivery = 'pickup') {
+  const deliveryFee = delivery === 'home' ? HOME_DELIVERY_FEE : 0;
+  const youPay = Math.round((rx.medicationCost - rx.planPays + deliveryFee) * 100) / 100;
   return {
     medicationCost: rx.medicationCost,
     planPays: rx.planPays,
-    deliveryFee: 0,
+    deliveryFee,
     youPay,
   };
 }
