@@ -30,7 +30,7 @@ function greeting(date) {
   return 'Good evening';
 }
 
-function buildReply(question, prescriptions, claims, plan) {
+function buildReply(question, prescriptions, claims, plan, statusContext) {
   const q = question.trim().toLowerCase();
   if (!q) return 'Ask about a refill, a claim, or your deductible.';
 
@@ -47,7 +47,7 @@ function buildReply(question, prescriptions, claims, plan) {
   }
 
   if (q.includes('refill') || q.includes('prescription') || q.includes('pharmacy') || q.includes('cost')) {
-    const ready = prescriptions.filter((rx) => canRefill(rx));
+    const ready = prescriptions.filter((rx) => canRefill(rx, statusContext));
     if (ready.length === 0) {
       return 'Nothing is ready to refill today. Open Pharmacy to see last refill dates and which orders are pending.';
     }
@@ -56,7 +56,7 @@ function buildReply(question, prescriptions, claims, plan) {
       .join(' ');
   }
 
-  const pending = prescriptions.filter((rx) => getRxStatus(rx) === 'pending').length;
+  const pending = prescriptions.filter((rx) => getRxStatus(rx, statusContext) === 'pending').length;
   return `I can check refills, claims, and pharmacy spending. ${pending} prescription${pending === 1 ? ' is' : 's are'} pending right now.`;
 }
 
@@ -80,7 +80,7 @@ function ShortcutIcon({ children, tint = theme.blueSoft, color = theme.blue }) {
   );
 }
 
-export default function HomeScreen({ user, prescriptions, claims, plan, onNavigate }) {
+export default function HomeScreen({ user, prescriptions, statusContext = {}, claims, plan, onNavigate }) {
   const [query, setQuery] = useState('');
   const [reply, setReply] = useState('');
   const [thinking, setThinking] = useState(false);
@@ -100,7 +100,7 @@ export default function HomeScreen({ user, prescriptions, claims, plan, onNaviga
     setThinking(true);
     window.clearTimeout(thinkTimer.current);
     thinkTimer.current = window.setTimeout(() => {
-      setReply(buildReply(question, prescriptions, claims, plan));
+      setReply(buildReply(question, prescriptions, claims, plan, statusContext));
       setThinking(false);
     }, 900);
   }

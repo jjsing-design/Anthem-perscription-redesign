@@ -1,6 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import BottomNav from './components/BottomNav';
-import { claims as seedClaims, prescriptions as seedPrescriptions, pharmacyPlan, user } from './data/mockData';
+import { systemClock } from './data/clock';
+import {
+  claims as seedClaims,
+  createSeedData,
+  findActiveFailedAttempt,
+  generateRequestId,
+  memberServicesPhone,
+  pharmacies,
+  pharmacyPlan,
+  user,
+} from './data/mockData';
+import { createAppServer } from './data/refillServer';
 import ClaimsScreen from './screens/ClaimsScreen';
 import HomeScreen from './screens/HomeScreen';
 import LoginScreen from './screens/LoginScreen';
@@ -24,48 +35,158 @@ const TITLES = {
 
 const MAIN_TABS = ['home', 'claims', 'pharmacy', 'settings'];
 
-export default function App() {
-  const [route, setRoute] = useState('login');
-  const [prescriptions, setPrescriptions] = useState(seedPrescriptions);
+function currentSearch() {
+  return typeof window === 'undefined' ? '' : window.location.search;
+}
+
+// clock, server and initialRoute are for tests; the app uses the defaults.
+export default function App({ clock = systemClock, server: injectedServer, initialRoute = 'login' }) {
+  const [seed, setSeed] = useState(() => createSeedData(clock.now()));
+  const [route, setRoute] = useState(initialRoute);
+  const [prescriptions, setPrescriptions] = useState(seed.prescriptions);
+  const [requests, setRequests] = useState(seed.refillRequests);
+  const [failedAttempts, setFailedAttempts] = useState(seed.failedAttempts);
   const [claims, setClaims] = useState(seedClaims);
   const [selectedRx, setSelectedRx] = useState(null);
+  const [draft, setDraft] = useState(null);
   const [order, setOrder] = useState(null);
-  const placeTimer = useRef(null);
+  const serverRef = useRef(null);
+  const inFlight = useRef(false);
+  const session = useRef(0);
+
+  if (!serverRef.current) {
+    serverRef.current =
+      injectedServer ?? createAppServer({ clock, requests: seed.refillRequests, search: currentSearch() });
+  }
 
   useEffect(() => {
     document.title = `${TITLES[route]} · Anthem`;
     window.scrollTo(0, 0);
   }, [route]);
 
-  useEffect(() => () => window.clearTimeout(placeTimer.current), []);
+  // Re-render once a minute so time-based statuses (Low, the 24-hour Not-sent
+  // expiry) update while a screen stays open.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => setTick((n) => n + 1), 60 * 1000);
+    return () => window.clearInterval(id);
+  }, []);
 
-  function confirmRefill({ pharmacy, delivery, expected, costs }) {
-    const medication = `${selectedRx.name} ${selectedRx.dosage}`;
-    const rxId = selectedRx.id;
+  const statusContext = { now: clock.now(), requests, failedAttempts };
+
+  function openRefill(rx) {
+    const attempt = findActiveFailedAttempt(rx.id, failedAttempts, clock.now());
+    setSelectedRx(rx);
+    setDraft(
+      attempt
+        ? {
+            // Returning to a Not-sent refill is a retry: same request ID and entries.
+            prescriptionId: rx.id,
+            requestId: attempt.requestId,
+            pharmacyId: attempt.pharmacyId,
+            delivery: attempt.delivery,
+            attempts: attempt.attempts,
+            error: null,
+          }
+        : {
+            prescriptionId: rx.id,
+            requestId: null,
+            pharmacyId: pharmacies[0].id,
+            delivery: 'pickup',
+            attempts: 0,
+            error: null,
+          },
+    );
+    setRoute('refill');
+  }
+
+  async function confirmRefill({ pharmacy, delivery, expected, costs }) {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    const mySession = session.current;
+    const rx = selectedRx;
+    // Generated on the device at the first confirm; every retry reuses it.
+    const requestId = draft.requestId ?? generateRequestId();
+    const attemptDraft = { ...draft, requestId, pharmacyId: pharmacy.id, delivery, error: null };
+    setDraft(attemptDraft);
     setRoute('placing');
-    window.clearTimeout(placeTimer.current);
-    placeTimer.current = window.setTimeout(() => {
+
+    let response;
+    try {
+      response = await serverRef.current.submitRefill({
+        requestId,
+        prescriptionId: rx.id,
+        pharmacy,
+        delivery,
+      });
+    } finally {
+      inFlight.current = false;
+    }
+    if (mySession !== session.current) return;
+
+    const rememberRequest = (request) =>
+      setRequests((current) =>
+        current.some((req) => req.requestId === request.requestId) ? current : [...current, request],
+      );
+
+    if (response.status === 'created' || response.status === 'existing') {
+      rememberRequest(response.request);
+      setFailedAttempts((current) => current.filter((attempt) => attempt.prescriptionId !== rx.id));
       setOrder({
         orderNumber: `RX-${Math.floor(100000 + Math.random() * 900000)}`,
-        medication,
+        requestId,
+        medication: `${rx.name} ${rx.dosage}`,
         pharmacy,
         delivery,
         expected,
         youPay: costs.youPay,
         deliveryFee: costs.deliveryFee,
       });
-      setPrescriptions((current) =>
-        current.map((rx) => (rx.id === rxId ? { ...rx, fulfillment: 'pending' } : rx)),
-      );
+      setDraft(null);
       setRoute('order');
-    }, 1400);
+      return;
+    }
+
+    if (response.status === 'duplicate') {
+      rememberRequest(response.request);
+      setDraft({ ...attemptDraft, error: { kind: 'duplicate', request: response.request } });
+      setRoute('refill');
+      return;
+    }
+
+    // Known failure: nothing was created. Record it and keep every entry.
+    const attempts = (draft.attempts ?? 0) + 1;
+    const record = {
+      prescriptionId: rx.id,
+      requestId,
+      failedAt: clock.now().toISOString(),
+      failure: response.failure,
+      attempts,
+      pharmacyId: pharmacy.id,
+      delivery,
+    };
+    setFailedAttempts((current) => [
+      ...current.filter((attempt) => attempt.prescriptionId !== rx.id),
+      record,
+    ]);
+    setDraft({ ...attemptDraft, attempts, error: { kind: response.failure, pharmacyName: pharmacy.name } });
+    setRoute('refill');
   }
 
   function logout() {
-    window.clearTimeout(placeTimer.current);
-    setPrescriptions(seedPrescriptions);
+    session.current += 1;
+    inFlight.current = false;
+    const next = createSeedData(clock.now());
+    setSeed(next);
+    setPrescriptions(next.prescriptions);
+    setRequests(next.refillRequests);
+    setFailedAttempts(next.failedAttempts);
+    if (!injectedServer) {
+      serverRef.current = createAppServer({ clock, requests: next.refillRequests, search: currentSearch() });
+    }
     setClaims(seedClaims);
     setSelectedRx(null);
+    setDraft(null);
     setOrder(null);
     setRoute('login');
   }
@@ -80,6 +201,7 @@ export default function App() {
         <HomeScreen
           user={user}
           prescriptions={prescriptions}
+          statusContext={statusContext}
           claims={claims}
           plan={pharmacyPlan}
           onNavigate={setRoute}
@@ -90,16 +212,18 @@ export default function App() {
         <PharmacyScreen
           plan={pharmacyPlan}
           prescriptions={prescriptions}
-          onRefill={(rx) => {
-            setSelectedRx(rx);
-            setRoute('refill');
-          }}
+          statusContext={statusContext}
+          onRefill={openRefill}
         />
       )}
 
-      {route === 'refill' && selectedRx && (
+      {route === 'refill' && selectedRx && draft && (
         <RefillConfirmation
           prescription={selectedRx}
+          draft={draft}
+          supportPhone={memberServicesPhone}
+          now={statusContext.now}
+          onDraftChange={(changes) => setDraft((current) => ({ ...current, ...changes }))}
           onCancel={() => setRoute('pharmacy')}
           onConfirm={confirmRefill}
         />

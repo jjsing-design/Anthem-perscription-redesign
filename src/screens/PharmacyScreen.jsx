@@ -74,7 +74,7 @@ function Meter({ label, met, max }) {
   );
 }
 
-export default function PharmacyScreen({ plan, prescriptions, onRefill }) {
+export default function PharmacyScreen({ plan, prescriptions, statusContext = {}, onRefill }) {
   return (
     <div>
       <PageHeader eyebrow={`${plan.year} pharmacy benefit`} title="Pharmacy" />
@@ -91,9 +91,9 @@ export default function PharmacyScreen({ plan, prescriptions, onRefill }) {
         <h2 style={sectionTitleStyle}>Active prescriptions</h2>
         <div style={{ display: 'grid', gap: 12 }}>
           {prescriptions.map((rx) => {
-            const status = getRxStatus(rx);
-            const ready = canRefill(rx);
-            const helper = refillHelper(rx);
+            const status = getRxStatus(rx, statusContext);
+            const ready = canRefill(rx, statusContext);
+            const helper = refillHelper(rx, statusContext);
             const cost = costBreakdown(rx);
 
             return (
@@ -117,14 +117,16 @@ export default function PharmacyScreen({ plan, prescriptions, onRefill }) {
                   <button
                     type="button"
                     disabled={!ready}
-                    aria-label={`Refill ${rx.name} now`}
+                    aria-label={`Refill ${rx.name}`}
                     onClick={() => onRefill(rx)}
                     style={primaryButton(!ready)}
                   >
-                    Refill Now
+                    Refill
                   </button>
                   {helper && (
-                    <p style={{ margin: '8px 0 0', color: theme.muted, fontSize: 13 }}>{helper}</p>
+                    <p style={{ margin: '8px 0 0', color: status === 'pending' ? theme.text : theme.muted, fontSize: 13 }}>
+                      {helper}
+                    </p>
                   )}
                 </div>
               </article>

@@ -1,9 +1,15 @@
+import { DAY_MS, systemClock } from './clock';
+
 export const user = {
   firstName: 'Jordan',
   lastName: 'Ellis',
   memberId: 'XAH8846210',
   planName: 'Anthem Blue Access PPO',
 };
+
+// PLACEHOLDER: the rules say "Call [number]" but do not give the number.
+// This is a fictional 555 number for the prototype, not a real Anthem line.
+export const memberServicesPhone = '1-800-555-0100';
 
 export const pharmacyPlan = {
   name: 'Pharmacy benefit',
@@ -18,51 +24,6 @@ export const pharmacies = [
   { id: 'cvs', name: 'CVS Pharmacy', detail: 'Colfax Ave', distance: '0.4 mi', type: 'retail' },
   { id: 'walgreens', name: 'Walgreens', detail: 'Colorado Blvd', distance: '1.1 mi', type: 'retail' },
   { id: 'mail', name: 'Anthem Home Delivery', detail: 'Mail order', distance: 'Ships to you', type: 'mail' },
-];
-
-export const prescriptions = [
-  {
-    id: 'rx-atorvastatin',
-    name: 'Atorvastatin',
-    dosage: '20 mg',
-    form: 'Tablet',
-    quantity: 30,
-    daysSupply: 30,
-    prescriber: 'Dr. Priya Shah',
-    lastRefilled: '2026-08-18',
-    nextRefillDate: '2026-09-17',
-    medicationCost: 62.4,
-    planPays: 49.9,
-    fulfillment: null,
-  },
-  {
-    id: 'rx-lisinopril',
-    name: 'Lisinopril',
-    dosage: '10 mg',
-    form: 'Tablet',
-    quantity: 30,
-    daysSupply: 30,
-    prescriber: 'Dr. Priya Shah',
-    lastRefilled: '2026-09-18',
-    nextRefillDate: '2026-10-18',
-    medicationCost: 36,
-    planPays: 28,
-    fulfillment: null,
-  },
-  {
-    id: 'rx-metformin',
-    name: 'Metformin',
-    dosage: '500 mg',
-    form: 'Tablet',
-    quantity: 60,
-    daysSupply: 30,
-    prescriber: 'Dr. Priya Shah',
-    lastRefilled: '2026-09-01',
-    nextRefillDate: '2026-10-01',
-    medicationCost: 18.25,
-    planPays: 14,
-    fulfillment: 'pending',
-  },
 ];
 
 export const claims = [
@@ -92,42 +53,36 @@ export const claims = [
   },
 ];
 
+// ---------------------------------------------------------------------------
+// Dates
+// ---------------------------------------------------------------------------
+
 export function startOfDay(date) {
   const next = new Date(date);
   next.setHours(0, 0, 0, 0);
   return next;
 }
 
-export function getRxStatus(rx, today = new Date()) {
-  if (rx.fulfillment === 'pending') return 'pending';
-  const due = startOfDay(new Date(`${rx.nextRefillDate}T00:00:00`));
-  return due <= startOfDay(today) ? 'refill_available' : 'active';
+export function addDays(date, days) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
 }
 
-export function canRefill(rx, today = new Date()) {
-  return getRxStatus(rx, today) === 'refill_available';
+// Local calendar date as 'YYYY-MM-DD'.
+export function toIsoDate(date) {
+  const d = new Date(date);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-export const HOME_DELIVERY_FEE = 4.99;
-
-export function costBreakdown(rx, delivery = 'pickup') {
-  const deliveryFee = delivery === 'home' ? HOME_DELIVERY_FEE : 0;
-  const youPay = Math.round((rx.medicationCost - rx.planPays + deliveryFee) * 100) / 100;
-  return {
-    medicationCost: rx.medicationCost,
-    planPays: rx.planPays,
-    deliveryFee,
-    youPay,
-  };
-}
-
-export function money(amount) {
-  return amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+export function parseIsoDate(iso) {
+  const [year, month, day] = iso.split('-').map(Number);
+  return new Date(year, month - 1, day);
 }
 
 export function formatDate(iso) {
-  const [year, month, day] = iso.split('-').map(Number);
-  return new Date(year, month - 1, day).toLocaleDateString('en-US', {
+  return parseIsoDate(iso).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -145,9 +100,245 @@ export function expectedDate(delivery, today = new Date()) {
   });
 }
 
-export function refillHelper(rx, today = new Date()) {
-  const status = getRxStatus(rx, today);
-  if (status === 'pending') return 'A refill is already in progress';
-  if (status === 'active') return `Available ${formatDate(rx.nextRefillDate)}`;
+// Same timing as expectedDate (pickup next day, home delivery in 5 days),
+// as an ISO date for the request record's expected update date.
+export function expectedUpdateDate(delivery, now = new Date()) {
+  return toIsoDate(addDays(startOfDay(now), delivery === 'home' ? 5 : 1));
+}
+
+// ---------------------------------------------------------------------------
+// Seed data. Dates are relative to "now" so the sample always shows one
+// medication in each state: normal, Low, Pending, Not sent.
+// ---------------------------------------------------------------------------
+
+export function createSeedData(now = systemClock.now()) {
+  const today = startOfDay(now);
+  const daysAgo = (n) => toIsoDate(addDays(today, -n));
+  const daysFromNow = (n) => toIsoDate(addDays(today, n));
+
+  const prescriptions = [
+    {
+      // NORMAL: 90 tablets at 1/day, filled 80 days ago -> runs out in 10 days.
+      id: 'rx-atorvastatin',
+      name: 'Atorvastatin',
+      dosage: '20 mg',
+      form: 'Tablet',
+      quantity: 90,
+      dailyDose: 1,
+      daysSupply: 90,
+      refillsRemaining: 3,
+      prescriber: 'Dr. Priya Shah',
+      lastRefilled: daysAgo(80),
+      nextRefillDate: daysAgo(5),
+      medicationCost: 62.4,
+      planPays: 49.9,
+    },
+    {
+      // LOW: 30 tablets at 1/day, filled 26 days ago -> runs out in 4 days.
+      id: 'rx-lisinopril',
+      name: 'Lisinopril',
+      dosage: '10 mg',
+      form: 'Tablet',
+      quantity: 30,
+      dailyDose: 1,
+      daysSupply: 30,
+      refillsRemaining: 5,
+      prescriber: 'Dr. Priya Shah',
+      lastRefilled: daysAgo(26),
+      nextRefillDate: daysAgo(3),
+      medicationCost: 36,
+      planPays: 28,
+    },
+    {
+      // PENDING: has an open request (below). Also within 7 days of run-out,
+      // so it shows Pending over Low (status priority).
+      id: 'rx-metformin',
+      name: 'Metformin',
+      dosage: '500 mg',
+      form: 'Tablet',
+      quantity: 60,
+      dailyDose: 2,
+      daysSupply: 30,
+      refillsRemaining: 2,
+      prescriber: 'Dr. Priya Shah',
+      lastRefilled: daysAgo(27),
+      nextRefillDate: daysAgo(4),
+      medicationCost: 18.25,
+      planPays: 14,
+    },
+    {
+      // NOT SENT: a failed attempt 2 hours ago (below). Also within 7 days of
+      // run-out, so it shows Not sent over Low (status priority).
+      id: 'rx-levothyroxine',
+      name: 'Levothyroxine',
+      dosage: '50 mcg',
+      form: 'Tablet',
+      quantity: 30,
+      dailyDose: 1,
+      daysSupply: 30,
+      refillsRemaining: 4,
+      prescriber: 'Dr. Priya Shah',
+      lastRefilled: daysAgo(25),
+      nextRefillDate: daysAgo(2),
+      medicationCost: 15,
+      planPays: 11,
+    },
+  ];
+
+  // Refill request records.
+  const refillRequests = [
+    {
+      requestId: 'req-seed-metformin',
+      prescriptionId: 'rx-metformin',
+      status: 'processing',
+      submittedAt: addDays(now, -1).toISOString(),
+      expectedUpdate: daysFromNow(1),
+      pharmacyId: 'cvs',
+      delivery: 'pickup',
+    },
+  ];
+
+  // Per-prescription failed-attempt records (known failures only).
+  const failedAttempts = [
+    {
+      prescriptionId: 'rx-levothyroxine',
+      requestId: 'req-seed-levothyroxine',
+      failedAt: new Date(new Date(now).getTime() - 2 * 60 * 60 * 1000).toISOString(),
+      failure: 'pharmacy_unreachable',
+      attempts: 1,
+      pharmacyId: 'cvs',
+      delivery: 'pickup',
+    },
+  ];
+
+  return { prescriptions, refillRequests, failedAttempts };
+}
+
+const seed = createSeedData();
+export const prescriptions = seed.prescriptions;
+export const refillRequests = seed.refillRequests;
+export const failedAttempts = seed.failedAttempts;
+
+// ---------------------------------------------------------------------------
+// Branch A: open requests
+// ---------------------------------------------------------------------------
+
+// End states: delivered (delivery), ready for pickup (pickup), cancelled, failed.
+export const REQUEST_END_STATES = ['delivered', 'ready_for_pickup', 'cancelled', 'failed'];
+
+export function isRequestOpen(request) {
+  return Boolean(request) && !REQUEST_END_STATES.includes(request.status);
+}
+
+export function findOpenRequest(prescriptionId, requests = []) {
+  return requests.find((req) => req.prescriptionId === prescriptionId && isRequestOpen(req)) ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Branch B: Not sent (clears on successful retry, or 24 hours after the
+// failed attempt, whichever comes first)
+// ---------------------------------------------------------------------------
+
+export const NOT_SENT_WINDOW_MS = DAY_MS;
+
+export function isNotSentActive(attempt, now = new Date()) {
+  if (!attempt) return false;
+  const age = new Date(now).getTime() - new Date(attempt.failedAt).getTime();
+  return age >= 0 && age < NOT_SENT_WINDOW_MS;
+}
+
+export function findActiveFailedAttempt(prescriptionId, attempts = [], now = new Date()) {
+  return (
+    attempts.find((attempt) => attempt.prescriptionId === prescriptionId && isNotSentActive(attempt, now)) ?? null
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Low: today is within 7 days of the run-out date.
+// Run-out date = last fill date + (quantity / daily dose) days.
+// ---------------------------------------------------------------------------
+
+export const LOW_WINDOW_DAYS = 7;
+
+// A fractional supply (e.g. 45 tablets at 2/day) is rounded down to whole
+// days (see report: flagged).
+export function runOutDate(rx) {
+  const days = Math.floor(rx.quantity / rx.dailyDose);
+  return addDays(parseIsoDate(rx.lastRefilled), days);
+}
+
+export function daysUntilRunOut(rx, now = new Date()) {
+  return Math.round((startOfDay(runOutDate(rx)).getTime() - startOfDay(now).getTime()) / DAY_MS);
+}
+
+// Includes a run-out date that has already passed (see report: flagged).
+export function isLow(rx, now = new Date()) {
+  return daysUntilRunOut(rx, now) <= LOW_WINDOW_DAYS;
+}
+
+// ---------------------------------------------------------------------------
+// Status priority: Not sent -> Pending -> Low -> normal.
+// "normal" keeps the prototype's existing labels: Refill Available / Active.
+// ---------------------------------------------------------------------------
+
+export function getRxStatus(rx, { now = new Date(), requests = [], failedAttempts: attempts = [] } = {}) {
+  if (findActiveFailedAttempt(rx.id, attempts, now)) return 'not_sent';
+  if (findOpenRequest(rx.id, requests)) return 'pending';
+  if (isLow(rx, now)) return 'low';
+  return isRefillDue(rx, now) ? 'refill_available' : 'active';
+}
+
+// Existing prototype rule, unchanged: refill opens on nextRefillDate.
+export function isRefillDue(rx, now = new Date()) {
+  return startOfDay(parseIsoDate(rx.nextRefillDate)) <= startOfDay(now);
+}
+
+export function canRefill(rx, context = {}) {
+  const status = getRxStatus(rx, context);
+  if (status === 'not_sent') return true;
+  if (status === 'pending') return false;
+  return isRefillDue(rx, context.now ?? new Date());
+}
+
+export function refillHelper(rx, context = {}) {
+  const status = getRxStatus(rx, context);
+  if (status === 'pending') {
+    const request = findOpenRequest(rx.id, context.requests);
+    return `Refill requested ${formatDate(toIsoDate(request.submittedAt))}. Expected update ${formatDate(request.expectedUpdate)}.`;
+  }
+  if (status === 'not_sent') return '';
+  if (!isRefillDue(rx, context.now ?? new Date())) return `Available ${formatDate(rx.nextRefillDate)}`;
   return '';
+}
+
+// ---------------------------------------------------------------------------
+// Duplicate prevention: request ID generated on the device at confirm.
+// ---------------------------------------------------------------------------
+
+export function generateRequestId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `req-${crypto.randomUUID()}`;
+  }
+  return `req-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+// ---------------------------------------------------------------------------
+// Cost
+// ---------------------------------------------------------------------------
+
+export const HOME_DELIVERY_FEE = 4.99;
+
+export function costBreakdown(rx, delivery = 'pickup') {
+  const deliveryFee = delivery === 'home' ? HOME_DELIVERY_FEE : 0;
+  const youPay = Math.round((rx.medicationCost - rx.planPays + deliveryFee) * 100) / 100;
+  return {
+    medicationCost: rx.medicationCost,
+    planPays: rx.planPays,
+    deliveryFee,
+    youPay,
+  };
+}
+
+export function money(amount) {
+  return amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 }

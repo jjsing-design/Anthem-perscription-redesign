@@ -4,6 +4,8 @@ const TONES = {
   refill_available: { label: 'Refill Available', color: theme.green, background: theme.greenSoft },
   active: { label: 'Active', color: theme.gray, background: theme.graySoft },
   pending: { label: 'Pending', color: theme.orange, background: theme.orangeSoft },
+  low: { label: 'Low', color: theme.yellow, background: theme.yellowSoft },
+  not_sent: { label: 'Not sent. Try again', color: theme.redText, background: theme.redSoft },
   paid: { label: 'Paid', color: theme.green, background: theme.greenSoft },
   denied: { label: 'Denied', color: theme.red, background: theme.redSoft },
 };
