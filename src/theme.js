@@ -1,23 +1,23 @@
 export const theme = {
-  canvas: '#D5DBE3',
-  bg: '#F3F5F8',
+  canvas: '#7EB0FF',
+  bg: '#F4F7FB',
   white: '#FFFFFF',
-  text: '#132033',
-  muted: '#5E6B7A',
-  faint: '#8B97A6',
-  line: '#E3E8EE',
-  blue: '#0050C8',
-  blueDark: '#06243F',
-  blueSoft: '#E7F0FB',
-  green: '#0C7A43',
-  greenSoft: '#E5F6EC',
-  orange: '#8A4B08',
-  orangeSoft: '#FFF1E0',
-  red: '#9E2B25',
+  text: '#1B2437',
+  muted: '#8B95A8',
+  faint: '#A8B3C4',
+  line: '#E6EDF5',
+  blue: '#3B78F0',
+  blueBright: '#5B95FF',
+  blueSoft: '#E8F1FF',
+  green: '#1F9D55',
+  greenSoft: '#E7F8EE',
+  orange: '#C26A12',
+  orangeSoft: '#FFF3E4',
+  red: '#E14B4B',
   redSoft: '#FDECEC',
-  gray: '#5C6773',
-  graySoft: '#EEF1F4',
-  shadow: '0 1px 2px rgba(16, 32, 51, 0.04), 0 10px 28px rgba(16, 32, 51, 0.06)',
+  gray: '#6D7890',
+  graySoft: '#EEF2F7',
+  shadow: '0 10px 28px rgba(59, 120, 240, 0.08)',
 };
 
 export const shellStyle = {
@@ -26,7 +26,7 @@ export const shellStyle = {
   margin: '0 auto',
   minHeight: '100vh',
   background: theme.bg,
-  boxShadow: '0 0 0 1px rgba(16, 32, 51, 0.06)',
+  boxShadow: '0 24px 60px rgba(37, 99, 235, 0.16)',
   position: 'relative',
 };
 
@@ -42,13 +42,33 @@ export const fixedBarStyle = {
 
 export const cardStyle = {
   background: theme.white,
-  borderRadius: 18,
+  borderRadius: 24,
   boxShadow: theme.shadow,
+  border: `1px solid ${theme.line}`,
   padding: 16,
 };
 
-export const screenStyle = {
-  padding: 'calc(20px + env(safe-area-inset-top)) 20px calc(112px + env(safe-area-inset-bottom))',
+export const contentStyle = {
+  padding: '0 20px calc(124px + env(safe-area-inset-bottom))',
+  marginTop: -20,
+};
+
+export const sectionTitleStyle = {
+  margin: '22px 0 12px',
+  fontSize: 18,
+  fontWeight: 800,
+  letterSpacing: '-0.03em',
+  color: theme.text,
+};
+
+export const fieldStyle = {
+  width: '100%',
+  border: 'none',
+  borderRadius: 16,
+  padding: '14px 16px',
+  fontSize: 16,
+  color: theme.text,
+  background: '#F3F6FB',
 };
 
 export function primaryButton(disabled = false) {
@@ -58,10 +78,11 @@ export function primaryButton(disabled = false) {
     fontSize: 16,
     fontWeight: 700,
     lineHeight: 1.2,
-    padding: '14px 16px',
-    borderRadius: 14,
-    background: disabled ? '#D5DCE4' : theme.blue,
-    color: disabled ? '#6D7886' : '#FFFFFF',
+    padding: '15px 16px',
+    borderRadius: 16,
+    background: disabled ? '#E4EAF3' : 'linear-gradient(180deg, #5B95FF 0%, #3B78F0 100%)',
+    color: disabled ? '#8B95A8' : '#FFFFFF',
+    boxShadow: disabled ? 'none' : '0 8px 18px rgba(59, 120, 240, 0.28)',
     cursor: disabled ? 'not-allowed' : 'pointer',
     textAlign: 'center',
   };
@@ -71,7 +92,8 @@ export function secondaryButton(disabled = false) {
   return {
     ...primaryButton(disabled),
     background: theme.white,
-    color: disabled ? '#6D7886' : theme.text,
-    boxShadow: `inset 0 0 0 1.5px ${theme.line}`,
+    color: disabled ? '#8B95A8' : theme.text,
+    boxShadow: 'none',
+    border: `1.5px solid ${theme.line}`,
   };
 }

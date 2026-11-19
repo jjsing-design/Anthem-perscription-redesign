@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { primaryButton, theme } from '../theme';
+import { fieldStyle, primaryButton, theme } from '../theme';
 
 export default function LoginScreen({ onSignIn }) {
   const [username, setUsername] = useState('');
@@ -29,19 +29,25 @@ export default function LoginScreen({ onSignIn }) {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: theme.bg }}>
+    <div
+      style={{
+        minHeight: '100vh',
+        background: 'linear-gradient(180deg, #4C8BFF 0%, #8EBEFF 34%, #F4F7FB 68%)',
+      }}
+    >
       <header
         style={{
-          background: theme.blueDark,
           color: '#FFFFFF',
-          padding: 'calc(36px + env(safe-area-inset-top)) 24px 64px',
+          padding: 'calc(48px + env(safe-area-inset-top)) 24px 28px',
         }}
       >
-        <div style={{ fontSize: 32, fontWeight: 700, letterSpacing: '-0.04em' }}>anthem</div>
-        <h1 style={{ margin: '28px 0 8px', fontSize: 30, lineHeight: 1.15, fontWeight: 700 }}>
-          Sign in
+        <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'lowercase', opacity: 0.9 }}>
+          anthem
+        </div>
+        <h1 style={{ margin: '18px 0 8px', fontSize: 36, lineHeight: 1.05, fontWeight: 800, letterSpacing: '-0.04em' }}>
+          {showReset ? 'Reset password' : 'Sign in'}
         </h1>
-        <p style={{ margin: 0, color: 'rgba(255,255,255,0.76)', fontSize: 16, lineHeight: 1.4 }}>
+        <p style={{ margin: 0, maxWidth: 280, color: 'rgba(255,255,255,0.88)', fontSize: 16, lineHeight: 1.4 }}>
           Prescriptions, claims, and pharmacy costs in one place.
         </p>
       </header>
@@ -49,16 +55,16 @@ export default function LoginScreen({ onSignIn }) {
       <form
         onSubmit={showReset ? sendReset : signIn}
         style={{
-          margin: '-32px 16px 0',
+          margin: '0 20px',
           background: theme.white,
-          borderRadius: 20,
-          boxShadow: theme.shadow,
+          borderRadius: 28,
+          boxShadow: '0 16px 40px rgba(59, 120, 240, 0.12)',
           padding: 20,
           display: 'grid',
           gap: 14,
         }}
       >
-        <label style={{ display: 'grid', gap: 6, fontSize: 14, fontWeight: 700 }}>
+        <label style={labelStyle}>
           Username
           <input
             name="username"
@@ -72,7 +78,7 @@ export default function LoginScreen({ onSignIn }) {
         </label>
 
         {!showReset && (
-          <label style={{ display: 'grid', gap: 6, fontSize: 14, fontWeight: 700 }}>
+          <label style={labelStyle}>
             Password
             <input
               name="password"
@@ -109,25 +115,23 @@ export default function LoginScreen({ onSignIn }) {
             setResetSent(false);
             setError('');
           }}
-          style={{ color: theme.blue, fontSize: 15, fontWeight: 700, padding: '4px 0 2px', textDecoration: 'underline' }}
+          style={{ color: theme.blue, fontSize: 15, fontWeight: 700, padding: '4px 0 2px' }}
         >
           {showReset ? 'Back to sign in' : 'Forgot password?'}
         </button>
       </form>
 
-      <p style={{ margin: '24px 24px 0', color: theme.faint, fontSize: 13, lineHeight: 1.45, textAlign: 'center' }}>
+      <p style={{ margin: '24px 28px 0', color: theme.muted, fontSize: 13, lineHeight: 1.45, textAlign: 'center' }}>
         Sample member data for this redesign. Not a live Anthem sign-in.
       </p>
     </div>
   );
 }
 
-const fieldStyle = {
-  width: '100%',
-  border: `1.5px solid ${theme.line}`,
-  borderRadius: 12,
-  padding: '12px 14px',
-  fontSize: 16,
+const labelStyle = {
+  display: 'grid',
+  gap: 8,
+  fontSize: 13,
+  fontWeight: 700,
   color: theme.text,
-  background: theme.white,
 };
