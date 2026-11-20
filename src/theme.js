@@ -18,6 +18,8 @@ export const theme = {
   redText: '#B42318',
   yellow: '#7A5B00',
   yellowSoft: '#FFF4C2',
+  purple: '#6B3FA0',
+  purpleSoft: '#F1EAFB',
   gray: '#6D7890',
   graySoft: '#EEF2F7',
   shadow: '0 10px 28px rgba(59, 120, 240, 0.08)',

@@ -237,7 +237,10 @@ describe('Case 3: duplicate from a second source', () => {
     expect(refillButton('Atorvastatin').disabled).toBe(true);
   });
 
-  it('OBSERVATION (developer flag 9): duplicate on a Not sent medication keeps showing Not sent', async () => {
+  // Round 2, Change 2 (server wins): updated by dev-developer. Round 1 recorded
+  // that the row kept showing "Not sent" with Refill enabled; the rule now says
+  // the known open server request wins: Pending, Refill disabled.
+  it('server wins: duplicate on a Not sent medication turns the row Pending with Refill disabled', async () => {
     const { server } = setup();
     server.seedRequest({
       requestId: 'req-other-device-levo',
@@ -251,10 +254,11 @@ describe('Case 3: duplicate from a second source', () => {
     await settle();
     expect(screen.getByRole('alert').textContent).toContain('You already requested this refill');
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    // Recorded, not asserted as pass/fail: the rules don't say which wins.
     const levo = row('Levothyroxine');
-    expect(within(levo).getByText('Not sent. Try again')).toBeTruthy();
-    expect(refillButton('Levothyroxine').disabled).toBe(false);
+    expect(within(levo).queryByText('Not sent. Try again')).toBeNull();
+    expect(within(levo).getByText('Pending')).toBeTruthy();
+    expect(levo.textContent).toMatch(/Refill requested Nov 18, 2026\. Expected update Nov 19, 2026\./);
+    expect(refillButton('Levothyroxine').disabled).toBe(true);
   });
 });
 
@@ -351,7 +355,9 @@ describe('Case 6: status priority collisions', () => {
     expect(within(l).queryByText('Low')).toBeNull();
   });
 
-  it('Low + Pending + Not sent together shows Not sent', () => {
+  // Round 2, Change 2 (server wins): updated by dev-developer. Round 1 expected
+  // 'not_sent'; a known open server request now overrides the local record.
+  it('Low + Pending (known open server request) + Not sent together shows Pending', () => {
     const seed = createSeedData(NOW);
     const metformin = seed.prescriptions.find((rx) => rx.id === 'rx-metformin');
     const status = getRxStatus(metformin, {
@@ -359,7 +365,7 @@ describe('Case 6: status priority collisions', () => {
       requests: seed.refillRequests,
       failedAttempts: [{ prescriptionId: 'rx-metformin', failedAt: NOW.toISOString(), attempts: 1 }],
     });
-    expect(status).toBe('not_sent');
+    expect(status).toBe('pending');
   });
 });
 

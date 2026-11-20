@@ -102,8 +102,12 @@ export function createRefillServer({
 //   ?simulate=pharmacy         CVS Pharmacy is unreachable (choose another to succeed)
 //   ?simulate=connection       every submission fails before sending
 //   ?simulate=connection-once  the first submission fails, the retry succeeds
-//   ?simulate=duplicate        Atorvastatin already has an open request on the
-//                              server that this device's list doesn't show
+//   ?simulate=duplicate        The server holds open requests this device's
+//                              list doesn't show (made on another device):
+//                              - Atorvastatin (normal): the duplicate response
+//                              - Levothyroxine (Not sent on this device): the
+//                                server-wins case; confirming it shows the
+//                                duplicate response and the row turns Pending
 // Several can be combined with commas. No parameter = normal path.
 export function simulationFromSearch(search = '') {
   const params = new URLSearchParams(search);
@@ -128,6 +132,15 @@ export function createAppServer({ clock = systemClock, requests = [], search = '
     server.seedRequest({
       requestId: 'req-other-device-atorvastatin',
       prescriptionId: 'rx-atorvastatin',
+      status: 'submitted',
+      submittedAt: now.toISOString(),
+      expectedUpdate: expectedUpdateDate('pickup', now),
+      pharmacyId: 'walgreens',
+      delivery: 'pickup',
+    });
+    server.seedRequest({
+      requestId: 'req-other-device-levothyroxine',
+      prescriptionId: 'rx-levothyroxine',
       status: 'submitted',
       submittedAt: now.toISOString(),
       expectedUpdate: expectedUpdateDate('pickup', now),

@@ -7,9 +7,11 @@ export const user = {
   planName: 'Anthem Blue Access PPO',
 };
 
-// PLACEHOLDER: the rules say "Call [number]" but do not give the number.
-// This is a fictional 555 number for the prototype, not a real Anthem line.
-export const memberServicesPhone = '1-800-555-0100';
+// PLACEHOLDER / SIMULATED DATA: NOT A REAL SUPPORT LINE.
+// The help text ("Still not working? Call [number] ...") needs a number the
+// rules do not give. 555-01xx numbers are reserved for fiction. Replace with
+// the real member services number before any real use.
+export const PLACEHOLDER_SUPPORT_PHONE = '1-800-555-0100';
 
 export const pharmacyPlan = {
   name: 'Pharmacy benefit',
@@ -183,6 +185,23 @@ export function createSeedData(now = systemClock.now()) {
       medicationCost: 15,
       planPays: 11,
     },
+    {
+      // NEEDS A REFILL: 30 tablets at 1/day, filled 33 days ago -> ran out
+      // 3 days ago.
+      id: 'rx-amlodipine',
+      name: 'Amlodipine',
+      dosage: '5 mg',
+      form: 'Tablet',
+      quantity: 30,
+      dailyDose: 1,
+      daysSupply: 30,
+      refillsRemaining: 3,
+      prescriber: 'Dr. Priya Shah',
+      lastRefilled: daysAgo(33),
+      nextRefillDate: daysAgo(10),
+      medicationCost: 24,
+      planPays: 19,
+    },
   ];
 
   // Refill request records.
@@ -199,11 +218,14 @@ export function createSeedData(now = systemClock.now()) {
   ];
 
   // Per-prescription failed-attempt records (known failures only).
+  // firstFailedAt starts the 24-hour Not-sent window; failedAt is the latest.
+  const twoHoursAgo = new Date(new Date(now).getTime() - 2 * 60 * 60 * 1000).toISOString();
   const failedAttempts = [
     {
       prescriptionId: 'rx-levothyroxine',
       requestId: 'req-seed-levothyroxine',
-      failedAt: new Date(new Date(now).getTime() - 2 * 60 * 60 * 1000).toISOString(),
+      firstFailedAt: twoHoursAgo,
+      failedAt: twoHoursAgo,
       failure: 'pharmacy_unreachable',
       attempts: 1,
       pharmacyId: 'cvs',
@@ -236,15 +258,37 @@ export function findOpenRequest(prescriptionId, requests = []) {
 
 // ---------------------------------------------------------------------------
 // Branch B: Not sent (clears on successful retry, or 24 hours after the
-// failed attempt, whichever comes first)
+// FIRST failed attempt, whichever comes first; later failures do not
+// restart the clock)
 // ---------------------------------------------------------------------------
 
 export const NOT_SENT_WINDOW_MS = DAY_MS;
 
+export function notSentWindowStart(attempt) {
+  return attempt.firstFailedAt ?? attempt.failedAt;
+}
+
 export function isNotSentActive(attempt, now = new Date()) {
   if (!attempt) return false;
-  const age = new Date(now).getTime() - new Date(attempt.failedAt).getTime();
+  const age = new Date(now).getTime() - new Date(notSentWindowStart(attempt)).getTime();
   return age >= 0 && age < NOT_SENT_WINDOW_MS;
+}
+
+// The failed-attempt record after another known failure. Within an active
+// window it keeps the first failure's time; otherwise a new window starts.
+export function recordFailedAttempt(previous, { prescriptionId, requestId, failure, pharmacyId, delivery, attempts, now }) {
+  const at = new Date(now).toISOString();
+  const continuing = previous && isNotSentActive(previous, now);
+  return {
+    prescriptionId,
+    requestId,
+    firstFailedAt: continuing ? notSentWindowStart(previous) : at,
+    failedAt: at,
+    failure,
+    attempts,
+    pharmacyId,
+    delivery,
+  };
 }
 
 export function findActiveFailedAttempt(prescriptionId, attempts = [], now = new Date()) {
@@ -254,14 +298,14 @@ export function findActiveFailedAttempt(prescriptionId, attempts = [], now = new
 }
 
 // ---------------------------------------------------------------------------
-// Low: today is within 7 days of the run-out date.
-// Run-out date = last fill date + (quantity / daily dose) days.
+// Supply: run-out date = last fill date + (quantity / daily dose) days.
+// Needs a refill: the run-out date is today or earlier.
+// Low: the run-out date is 1-7 days away.
 // ---------------------------------------------------------------------------
 
 export const LOW_WINDOW_DAYS = 7;
 
-// A fractional supply (e.g. 45 tablets at 2/day) is rounded down to whole
-// days (see report: flagged).
+// Partial days of supply round down (decision log 3).
 export function runOutDate(rx) {
   const days = Math.floor(rx.quantity / rx.dailyDose);
   return addDays(parseIsoDate(rx.lastRefilled), days);
@@ -271,19 +315,32 @@ export function daysUntilRunOut(rx, now = new Date()) {
   return Math.round((startOfDay(runOutDate(rx)).getTime() - startOfDay(now).getTime()) / DAY_MS);
 }
 
-// Includes a run-out date that has already passed (see report: flagged).
+// "Has passed" = run-out date is today or earlier (round-2 operator note).
+export function needsRefill(rx, now = new Date()) {
+  return daysUntilRunOut(rx, now) <= 0;
+}
+
+// The run-out date has NOT passed and is within 7 days.
 export function isLow(rx, now = new Date()) {
-  return daysUntilRunOut(rx, now) <= LOW_WINDOW_DAYS;
+  const days = daysUntilRunOut(rx, now);
+  return days >= 1 && days <= LOW_WINDOW_DAYS;
 }
 
 // ---------------------------------------------------------------------------
-// Status priority: Not sent -> Pending -> Low -> normal.
+// Status priority: Not sent -> Pending -> Needs a refill -> Low -> normal.
 // "normal" keeps the prototype's existing labels: Refill Available / Active.
+//
+// Server wins (decision log 20): when the app knows of an open server-side
+// request, it shows Pending even if this device holds a Not-sent record.
+// Every open request the app knows of came from the server (seed data or a
+// server response), so a known open request always overrides Not sent.
 // ---------------------------------------------------------------------------
 
 export function getRxStatus(rx, { now = new Date(), requests = [], failedAttempts: attempts = [] } = {}) {
-  if (findActiveFailedAttempt(rx.id, attempts, now)) return 'not_sent';
-  if (findOpenRequest(rx.id, requests)) return 'pending';
+  const openRequest = findOpenRequest(rx.id, requests);
+  if (!openRequest && findActiveFailedAttempt(rx.id, attempts, now)) return 'not_sent';
+  if (openRequest) return 'pending';
+  if (needsRefill(rx, now)) return 'needs_refill';
   if (isLow(rx, now)) return 'low';
   return isRefillDue(rx, now) ? 'refill_available' : 'active';
 }

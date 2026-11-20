@@ -6,9 +6,10 @@ import {
   createSeedData,
   findActiveFailedAttempt,
   generateRequestId,
-  memberServicesPhone,
+  PLACEHOLDER_SUPPORT_PHONE,
   pharmacies,
   pharmacyPlan,
+  recordFailedAttempt,
   user,
 } from './data/mockData';
 import { createAppServer } from './data/refillServer';
@@ -149,6 +150,8 @@ export default function App({ clock = systemClock, server: injectedServer, initi
 
     if (response.status === 'duplicate') {
       rememberRequest(response.request);
+      // Server wins: the open request makes this device's Not-sent record moot.
+      setFailedAttempts((current) => current.filter((attempt) => attempt.prescriptionId !== rx.id));
       setDraft({ ...attemptDraft, error: { kind: 'duplicate', request: response.request } });
       setRoute('refill');
       return;
@@ -156,19 +159,20 @@ export default function App({ clock = systemClock, server: injectedServer, initi
 
     // Known failure: nothing was created. Record it and keep every entry.
     const attempts = (draft.attempts ?? 0) + 1;
-    const record = {
-      prescriptionId: rx.id,
-      requestId,
-      failedAt: clock.now().toISOString(),
-      failure: response.failure,
-      attempts,
-      pharmacyId: pharmacy.id,
-      delivery,
-    };
-    setFailedAttempts((current) => [
-      ...current.filter((attempt) => attempt.prescriptionId !== rx.id),
-      record,
-    ]);
+    const now = clock.now();
+    setFailedAttempts((current) => {
+      const previous = current.find((attempt) => attempt.prescriptionId === rx.id);
+      const record = recordFailedAttempt(previous, {
+        prescriptionId: rx.id,
+        requestId,
+        failure: response.failure,
+        pharmacyId: pharmacy.id,
+        delivery,
+        attempts,
+        now,
+      });
+      return [...current.filter((attempt) => attempt.prescriptionId !== rx.id), record];
+    });
     setDraft({ ...attemptDraft, attempts, error: { kind: response.failure, pharmacyName: pharmacy.name } });
     setRoute('refill');
   }
@@ -221,7 +225,7 @@ export default function App({ clock = systemClock, server: injectedServer, initi
         <RefillConfirmation
           prescription={selectedRx}
           draft={draft}
-          supportPhone={memberServicesPhone}
+          supportPhone={PLACEHOLDER_SUPPORT_PHONE}
           now={statusContext.now}
           onDraftChange={(changes) => setDraft((current) => ({ ...current, ...changes }))}
           onCancel={() => setRoute('pharmacy')}

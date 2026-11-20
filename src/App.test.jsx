@@ -43,6 +43,13 @@ describe('prescription list', () => {
     expect(metformin.textContent).toMatch(/Refill requested Nov 17, 2026\. Expected update Nov 19, 2026\./);
   });
 
+  it('shows "Needs a refill" as text for a medication whose run-out date has passed', () => {
+    setup();
+    const amlodipine = row('Amlodipine');
+    expect(within(amlodipine).getByText('Needs a refill')).toBeTruthy();
+    expect(within(amlodipine).queryByText('Low')).toBeNull();
+  });
+
   it('Not sent row keeps Refill enabled', () => {
     setup();
     expect(within(row('Levothyroxine')).getByRole('button', { name: 'Refill Levothyroxine' }).disabled).toBe(false);
@@ -118,6 +125,30 @@ describe('Branch B: known failures', () => {
     clock.advance(1);
     fireEvent.click(screen.getByRole('button', { name: /^Home/ }));
     fireEvent.click(screen.getAllByRole('button', { name: /Pharmacy/ })[0]);
+    expect(within(row('Atorvastatin')).getByText('Refill Available')).toBeTruthy();
+  });
+});
+
+describe('Round 2: 24-hour window runs from the first failure', () => {
+  it('a second failure 20h later does not extend Not sent past 24h from the first', async () => {
+    const { clock } = setup({ connectionFailures: 2 });
+    fireEvent.click(within(row('Atorvastatin')).getByRole('button', { name: 'Refill Atorvastatin' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm refill' }));
+    await settle();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    clock.advance(20 * 60 * 60 * 1000);
+    fireEvent.click(within(row('Atorvastatin')).getByRole('button', { name: 'Refill Atorvastatin' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm refill' }));
+    await settle();
+    expect(screen.getByRole('alert').textContent).toContain('Still not working?');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(within(row('Atorvastatin')).getByText('Not sent. Try again')).toBeTruthy();
+
+    clock.advance(4 * 60 * 60 * 1000); // 24h after the FIRST failure
+    fireEvent.click(screen.getByRole('button', { name: /^Home/ }));
+    fireEvent.click(screen.getAllByRole('button', { name: /Pharmacy/ })[0]);
+    expect(within(row('Atorvastatin')).queryByText('Not sent. Try again')).toBeNull();
     expect(within(row('Atorvastatin')).getByText('Refill Available')).toBeTruthy();
   });
 });
