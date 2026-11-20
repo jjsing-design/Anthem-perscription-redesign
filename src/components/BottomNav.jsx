@@ -5,7 +5,7 @@ const TABS = [
   { id: 'home', label: 'Home', icon: 'home' },
   { id: 'claims', label: 'Claims', icon: 'claims' },
   { id: 'pharmacy', label: 'Pharmacy', icon: 'pharmacy' },
-  { id: 'settings', label: 'Settings', icon: 'settings', disabled: true },
+  { id: 'settings', label: 'Settings', icon: 'settings' },
 ];
 
 export default function BottomNav({ current, onChange }) {
@@ -18,45 +18,41 @@ export default function BottomNav({ current, onChange }) {
         display: 'grid',
         gridTemplateColumns: 'repeat(4, 1fr)',
         background: theme.white,
-        borderTop: `1px solid ${theme.line}`,
-        padding: '6px 8px calc(8px + env(safe-area-inset-bottom))',
+        boxShadow: '0 -12px 32px rgba(59, 120, 240, 0.08)',
+        padding: '8px 6px calc(10px + env(safe-area-inset-bottom))',
       }}
     >
       {TABS.map((tab) => {
         const active = current === tab.id;
-        const color = tab.disabled ? '#B7BEC7' : active ? theme.blue : theme.muted;
+        const color = active ? theme.blue : '#A8B3C4';
 
         return (
           <button
             key={tab.id}
             type="button"
-            disabled={tab.disabled}
             aria-current={active ? 'page' : undefined}
-            aria-label={tab.disabled ? 'Settings, unavailable' : tab.label}
+            aria-label={tab.label}
             onClick={() => onChange(tab.id)}
             style={{
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
-              gap: 2,
-              padding: '4px 0',
+              gap: 3,
+              padding: '4px 0 2px',
               color,
-              cursor: tab.disabled ? 'not-allowed' : 'pointer',
+              cursor: 'pointer',
             }}
           >
+            <Icon name={tab.icon} />
             <span
               style={{
-                width: 56,
-                height: 32,
-                borderRadius: 16,
-                display: 'grid',
-                placeItems: 'center',
-                background: active ? theme.blueSoft : 'transparent',
+                width: 16,
+                height: 3,
+                borderRadius: 99,
+                background: active ? theme.blue : 'transparent',
               }}
-            >
-              <Icon name={tab.icon} />
-            </span>
-            <span style={{ fontSize: 12, fontWeight: active ? 700 : 600 }}>{tab.label}</span>
+            />
+            <span style={{ fontSize: 11, fontWeight: active ? 800 : 600 }}>{tab.label}</span>
           </button>
         );
       })}
